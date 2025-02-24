@@ -14,37 +14,34 @@ from scipy import stats
 
 
 class SfcRetrieval:
-	
-	
+
     def __init__(self,config = None, Data = None, Buoy = None):
 		# Initialising the surface retrieval algorithm
-		
+
 		#Reading options from the namelist:
         self.STEP = int(config['STEP'])  #1 if there is a "plateau", 0 otherwise
-        self.HEAT = int(config['HEAT']) #1 if there are heating cycles (SIMBAs), 0 otherwise 
+        self.HEAT = int(config['HEAT']) #1 if there are heating cycles (SIMBAs), 0 otherwise
         self.sonar = int(config['sonar']) #1 if IMB has sonar data (SIMB3 buoys)
         self.sno_ice= int(config['SnowIce']) #1 if we expect snow-ice, 0 to keep the ice surface immobile.
-        
+
         self.dtemp = float(config['DeltaTmin_snow']) # Temperature threshold to detect snow
         self.dtemp_i = float(config['DeltaTmin_ice']) # Temperature threshold to detect ice
         self.temp = self.dtemp + self.dtemp_i # Total minimum temperature difference in profile
-        
-        self.crit = float(config['dTdZcrit']) 
+
+        self.crit = float(config['dTdZcrit'])
         self.dTdzSnow = float(config['dTdZsnow'])
-        
+
         self.Datamin = int(config['DataPositionMin'])
         self.AirLim = int(config['AirPositionLim'])
         self.SnowLim = int(config['SnowPositionLim'])
         self.IceLim = int(config['IcePositionLim'])
         self.OceLim = int(config['OceanPositionLim'])
         self.init_time = int(config['StartLag'])
-        
+
         self.bottom_init = 0.0
-        
+
         self.sechour = 60*60
-        
-        
-        
+
         a,b = Data.shape
         if Buoy == None:
             self.nsensors = b
@@ -52,17 +49,15 @@ class SfcRetrieval:
         else:
             self.nsensors = Buoy.nsensors
             self.tstep = Buoy.tstep
-            
-            
+
         self.z = np.zeros((self.nsensors+1,1))
         for ks in range(1, self.nsensors+1):
             self.z[ks] = ks*-2.0
-        
-        
+
         #----------------------------------------
         # Set analysis vectors and arrays : derivatives
         #----------------------------------------
-            
+
         self.first_der = self.nanfill((a,self.nsensors+1))
         self.second_der = self.nanfill((a,self.nsensors+1))
         self.topsnow = self.nanfill((a,1))
@@ -79,12 +74,11 @@ class SfcRetrieval:
         self.snowbot_mode = np.nan
         self.icetop_mode = np.nan
         self.LengthPlateau = 0
-        
 
         #----------------------------------------
         # Set analysis vectors and arrays : minimisation
         #----------------------------------------
-        
+
         self.topsnow_minim = self.nanfill((a,1))
         self.bottomsnow_minim = self.nanfill((a,1))
         self.step_minim = self.nanfill((a,1))
@@ -93,22 +87,22 @@ class SfcRetrieval:
         self.icebottom_minim = self.nanfill((a,1))
         self.icethick_minim = self.nanfill((a,1))
         self.snowice_minim = self.nanfill((a,1))
-        
+
         self.hi_int = self.nanfill((a,1))
         self.hs_int = self.nanfill((a,1))
         self.snowice = self.nanfill((a,1))
         self.congelation = self.nanfill((a,1))
-    
+
         self.Delt = int(config['Delt'])
 
         self.t = self.nanfill((int(a*self.tstep/24),1))
         self.indice = self.nanfill((int(a*self.tstep/24),1))
-        
+
         # Temperature time series of snow layers, ice layers, interfaces
         self.Ttop = self.nanfill((a,1))
         self.Tsnow_layer = self.nanfill((a,1))
         self.Tinterface = self.nanfill((a,1))
-        self.Tbottom = self.nanfill((a,1)) 
+        self.Tbottom = self.nanfill((a,1))
         self.Ndata = a
 
 
@@ -120,47 +114,46 @@ class SfcRetrieval:
     #-------------------------------------------------------------------
     #-------------------------------------------------------------------
     #        GET THE SNOW AND ICE INTERFACE: FROM MINIMATION
-    #        
+    #
     #  This function finds the position of the material interfaces by the
-    #  minimation of error functions on a theoretical temperature 
+    #  minimation of error functions on a theoretical temperature
     #  profile.
-    #  
-    #  The vertical profiles are described by the following points to 
+    #
+    #  The vertical profiles are described by the following points to
     #  be retrieved:
-    #  
+    #
     #  Z1, T1 : Position and temperature of the air-snow interface
     #  Z2, T2 : Position and temperature of the snow-ice surface
-    #  Zice0, Tice0 : Original ice surface (at deployment) 
+    #  Zice0, Tice0 : Original ice surface (at deployment)
     #  Zp, Tp : Other end of surface plateau (SAMS buoys)
     #  Zc, Tc : Sensor located inside the ice
     #  Zio, Tio : Position and temperature of the ice-ocean interface
     #-------------------------------------------------------------------
 
-        #   Start by computing derivatives, and find initial guess on the 
+        #   Start by computing derivatives, and find initial guess on the
         #   interface positions
         self.compute_derivatives(Buoy = Buoy, Data=Data)
         self.Initial_estimates_from_derivatives(Buoy = Buoy, Data=Data)
 
         a,b = Data.shape
         print('finding interfaces from minimisation')
-
         #-------------------------------------
         #  Define positions of the sensors that are laying flat on the ice
         #     based on the invariant kink in Z-derivatives
         #     They are defined as positions Za and Zb.
         #-------------------------------------
-        
+
         # Take initial guess values from the derivatives
         Zice0 = int(np.squeeze(self.snowbot_mode))
         Zp = int(np.squeeze(self.icetop_mode))
-        
+
         #Populate the time series of upper sensor of the flat section,
         #which remains constant.
-        self.step_minim[:] = Zice0   
+        self.step_minim[:] = Zice0
 
         # Get the ocean surface temperature from deeper sensors
         Tio, dummy = stats.mode(Data[0,self.OceLim-10:self.OceLim])
-        
+
         #initialized previous itterate memory terms used later in the algo.
         Tice0_prev = -3.0
         Zice0_prev = int(Zice0)
@@ -168,55 +161,52 @@ class SfcRetrieval:
         Tminim0 = 1
         Tmin_prev = -3.0
         kyesterday = 0
-        
-        
-        # Starting loop over profiles 
+
+        # Starting loop over profiles
         for k1 in range(0,int(a)):
-			
+
 			#initialise the interface location as nans
             self.topsnow_minim[k1] = np.nan
             self.bottomsnow_minim[k1] = np.nan
-            self.icebottom_minim[k1] = np.nan  
-            
-            
-            
+            self.icebottom_minim[k1] = np.nan
+
             # k is an indice for daily data points,
             kday = int(np.min([int(k1*self.tstep/24),int(a*self.tstep/24)-1]))
             #set the data interval corresponding to the current day
             k_4days =np.max([0,(kday-4)*int(24/self.tstep)])
-            # 
-            #Find the time in the day with coldest temperature. Use as condition for ice to be cold in last 24h  
+            #
+            #Find the time in the day with coldest temperature. Use as condition for ice to be cold in last 24h
             #First guess is data close to 3-6am
-            k_night = np.nanmin([int( kday*(24/self.tstep)+self.init_time),int(a)])             
+            k_night = np.nanmin([int( kday*(24/self.tstep)+self.init_time),int(a)])
             Tmin_init = -3.0
-            for deltak in range (int(-24/(self.tstep*4)), int(24/(self.tstep*4)+1)):                    
+            k_minTemp = k1
+            for deltak in range (int(-24/(self.tstep*4)), int(24/(self.tstep*4)+1)):
                 Tmin = np.nanmin(Data[int(k_night + deltak),
                                  self.Datamin:int(self.nsensors-10)])
                 if (Tmin < Tmin_init):
                     k_minTemp = k_night  + deltak
-                    Tmin_init = Tmin                        
-            k_night = int(k_minTemp)           
-            
- 
+                    Tmin_init = Tmin
+            k_night = int(k_minTemp)
+
             #from now on, k is the "day number" and k1 is the actual data row indice
 
             if (np.isnan(Data[k1,2])):
+                print(Data[k1,:])
                 #Skip rows with invalid data
                 print('NaN at k1 = ', k1   )
             else:
-                
-                
+
                 #-------------------------------------
                 # INITIALIZING:
                 # Defining initial reference points in the profiles
-                # 
+                #
                 # Get the temperature at the reference pts (Tmin,Tice0,Tp,Tocean)
                 #-------------------------------------
 
-                # Position and temperature of lowest temperature in profile. Used as initial guess                
+                # Position and temperature of lowest temperature in profile. Used as initial guess
                 Tmin= np.nanmin(Data[k1,self.Datamin:self.nsensors-10])
                 Zmin = np.argmin((Data[k1,self.Datamin:self.nsensors-10]-Tmin)**2.0)+self.Datamin
-                
+                print(Tmin,Zmin)
                 # Air temperature
                 Tair = np.mean(Data[k1,self.Datamin:self.Datamin+5])
             
@@ -251,24 +241,23 @@ class SfcRetrieval:
                     #  interface is then set based on the profile that
                     #  minimes the error on a piece-wise linear profile.
                     #
-                    #  We only scan from the sensor where T=-2.2C. 
-                    #  This is to reduce computation cost while making sure 
-                    #  that we start above the interface, but close to it. 
+                    #  We only scan from the sensor where T=-2.2C.
+                    #  This is to reduce computation cost while making sure
+                    #  that we start above the interface, but close to it.
                     #-----------------------------------------------------------------
-                    
-                    
+
                     # Condition to continue: minimum deltaT in ice
                     if ((Tp < Tocean_mode - self.dtemp_i)):
-						
+
                         #Initializng the theoretical profile:
                         Zio_init = int(np.argmin((Data[k1,Zp:self.nsensors-10]+2.2)**2.0))+Zp
                         Tio_init = Data[k1,Zio_init]
                         Tanalytic_rec = self.nanfill((self.nsensors+1))
                         Err_min = 9999.0
-                        
-                        #Scan the sensors to find theoretical profile that best match the obs. 
+
+                        #Scan the sensors to find theoretical profile that best match the obs.
                         for dz in range(-10,10):
-                            
+
                             #re-initialise the theoretical profiles
                             Tanalytic = self.nanfill((self.nsensors+1))   #reset the piece-wise linear profile
                             Zio_Test = np.nanmax([Zc,Zio_init + dz])     #Test sensor position, limited to below Zc
@@ -314,28 +303,30 @@ class SfcRetrieval:
                 # 
                 #------------------------------------------------------------
 
-                # Conditions to continue:  
+                # Conditions to continue:
                 #  - minimum deltaT in the snow, for at least 6h,
-			    #  - no temperature gradient reversal in snow (piecewise linear assumption)	 
-			    # This is added to filter rare cases under rapid cooling weather, 
+			    #  - no temperature gradient reversal in snow (piecewise linear assumption)
+			    # This is added to filter rare cases under rapid cooling weather,
 			    # when the air temperature conditions is met
 				# but the snow layer remains warmer than the ice below
-				
-                    Tmax = np.max(Data[k1,Zmin:Zice0])
-                    if (((Tmin < Tice0 - self.dtemp) & 
-                         (Tmin_prev < Tice0_prev - self.dtemp)) & 
+                    if Zmin<Zice0:
+                        Tmax = np.max(Data[k1,Zmin:Zice0])
+                    else:
+                        Tmax = Tice0
+                    if (((Tmin < Tice0 - self.dtemp) &
+                         (Tmin_prev < Tice0_prev - self.dtemp)) &
                          ((Tmax < Tice0+0.25) & (Tair <= Tice0))):
 
 						#re-initialise parameters for new profile
                         Curv_init = 0.0
                         Zas = Zmin     #Initial guess: snow top is where Tmin is.
-            
+
                         #Span from Tmin to the original ice surface to test if it is the interface
                         for z_test in range(Zmin,int(Zice0)):
-							
+
 							#Temperature at test location
                             Tas_test = Data[k1,z_test]
-                            
+
                             #slope over 8cm
                             T_above = Data[k1,z_test-2]
                             T_below = Data[k1,z_test+2]
@@ -343,10 +334,10 @@ class SfcRetrieval:
                             #slope over 4cm above and below the test location
                             beta_snow_above = (Tas_test-T_above)/(-4.0)
                             beta_snow_below = (T_below-Tas_test)/(-4.0)
-                        
+
                             #Curvature over 8cm
                             Curv =(T_below-2.0*Tas_test+T_above)/(2.0)
-                        
+
                             # Determining if the location is the interface
                             if (Curv > Curv_init) & (-beta_snow_below > self.dTdzSnow) & (-beta_snow_above < self.dTdzSnow*2.0):
                                 Zas = int(np.nanmax([z_test,Zas]))
@@ -355,7 +346,6 @@ class SfcRetrieval:
                                 Curv_init = Curv
                                 for kz in range(Zas,Zice0):
                                     Tanalytic_rec[kz] =  Tas + beta_snow*(kz-Zas)
-                           
 
                 #------------------------------------------------------------
                 # 3. Snow-ice (flooding)
@@ -573,97 +563,96 @@ class SfcRetrieval:
 
 
 
-    def Initial_estimates_from_derivatives(self,Buoy = None,Data=None): 
+    def Initial_estimates_from_derivatives(self,Buoy = None,Data=None):
 	#-------------------------------------------------------------------
     #-------------------------------------------------------------------
-    #        
-    #  This function approximates the location of the 
+    #
+    #  This function approximates the location of the
     #  material interfaces from the derivative.
-    #  
+    #
     #  This method to detect the interfaces is not perfoming well (it is noisy), but
     #  it is useful initial guess in the more precised minimation retrieval
-    #  algorithm.    
+    #  algorithm.
     #
-    #  Estimates for the snow and ice layers are are processed independently  
+    #  Estimates for the snow and ice layers are are processed independently
     #-------------------------------------------------------------------
 
         #-----------------------------------------------
         # Snow layer
         #-----------------------------------------------
-		
+
         a,b = Data.shape
         for k1 in range(0, a-1):
-                
+
             #------------------------------------------------------
             # Find the minimum temperature at the top of the chain
             #------------------------------------------------------
-            # We find the indice of the minimum temperature, 
+            # We find the indice of the minimum temperature,
             # assuming that the snow layer is below this point
-                
-            # Note that Here, we skip the 10 top sensors (20 cm) 
-            # and assume that the snow syrface is <140cm away... 
+
+            # Note that Here, we skip the 10 top sensors (20 cm)
+            # and assume that the snow syrface is <140cm away...
             # Needs improvement
-                
+
             data_time_k = Data[k1,self.Datamin:self.AirLim]
             airTmin = np.amin(data_time_k)
-                
+
             start_ind = np.argmin(data_time_k)+self.Datamin
 
             # If the air temperature is too high, there is no gradient
             # and we skip the computations
             if ((airTmin < -self.temp) and (np.isnan(airTmin)==0)):
-                    
+
                 #Not sure why we need this...
                 if self.STEP == 1 and (start_ind > self.AirLim-self.Datamin):
                     print('Start is below 60, does not work for k1 = ', k1 )
                     nsnowmax = np.nan
                 else:
-                        
+
                     #-----------------------------------------------
                     # Find the position of air-snow interface
                     #-----------------------------------------------
-                        
+
                     #The maximum derivative ~ middle of the snow layer
                     TopChainDeriv = self.first_der[k1,start_ind:self.SnowLim]
                     midsnow_loc = np.argmax(TopChainDeriv)+start_ind
-          
+
                     #find the top of the snow as the nearest point above
-                    # the largest slope with 
+                    # the largest slope with
                     # a gradient <0.1 (self.dTdzSnow)
                     TopChainDeriv = self.first_der[k1,0:midsnow_loc]
                     N = len(TopChainDeriv)
                     indices = np.arange(N)
                     condition = indices[TopChainDeriv<self.dTdzSnow]
-                    N = len(condition)   
+                    N = len(condition)
                     if N == 0:
                         print("No snow detected!!!!")
-                    else:    
+                    else:
                         highest_snow_sensor = np.nanmax(condition)
                         self.topsnow[k1] = highest_snow_sensor
-        
+
                         #-----------------------------------------------
                         # Find the position of snow - ice interface
                         #-----------------------------------------------
-         
+
                         #Method: assuming that the interface is at the largest curvature point.
                         if self.STEP == 1:
                             MaxLim = self.SnowLim
-                        else: 
+                        else:
                             MaxLim = self.IceLim #we are spanning wider
                         SnowLayerInflection = self.second_der[k1,int(self.topsnow[k1]+1):MaxLim]
                         lowest_snow_sensor = np.argmin(SnowLayerInflection)+int(self.topsnow[k1]+1)
-                            
+
                         self.bottomsnow[k1] = lowest_snow_sensor
                         self.snowthick[k1] = (self.bottomsnow[k1]-self.topsnow[k1])*2.0
-                        
+
                         if self.STEP==0:
-                            self.icetop[k1] = lowest_snow_sensor2
-            
+                            self.icetop[k1] = lowest_snow_sensor
+
         # Interpolating to fill the gaps in data...
         self.bot_snow_int  = self.interp_data(Data = np.squeeze(self.bottomsnow))
         self.hs_int  = self.interp_data(Data=np.squeeze(self.snowthick))
-    
-    
+
         #-----------------------------------------------
         # Ice layer
         #-----------------------------------------------
@@ -706,9 +695,9 @@ class SfcRetrieval:
                                 print('Top ice does not work for k1 = ', k1 )
                             else:
                                 self.icetop[k1] = np.argmax(Inflection)+start_ind
-                    else:    
-                        
-                        start_ind = np.argmin(data_time_k)+self.Datamin  
+                    else:
+
+                        start_ind = np.argmin(data_time_k)+self.Datamin
                         BelowSnowDeriv = self.first_der[k1,start_ind:self.SnowLim]
                         topice_guess = np.argmax(BelowSnowDeriv)+start_ind
                         Inflection = self.second_der[k1,topice_guess:self.IceLim]
@@ -717,29 +706,29 @@ class SfcRetrieval:
                             print('Top ice does not work for k1 = ', k1 )
                         else:
                             self.icetop[k1] = np.argmin(Inflection)+topice_guess
-                            
+
                     #-----------------------------------------------
                     # Find the position of ice-ocean interface
                     #-----------------------------------------------
-                
-                if ((np.isnan(self.icetop[k1])==0)):    
+
+                if ((np.isnan(self.icetop[k1])==0)):
                     IceDeriv = self.first_der[k1,int(self.icetop[k1]+1):self.OceLim]
-                            
+
                     N = len(IceDeriv)
                     indices = np.arange(N)
                     condition = indices[IceDeriv<self.crit]
                     TopOcean_loc = np.nanmin(condition)
-                            
-                    #Ice bottom is directly above the upper ocean 
+
+                    #Ice bottom is directly above the upper ocean
                     #sensor
-                    
                     self.icebottom[k1] = TopOcean_loc+self.icetop[k1]
                     self.icethick[k1] = (self.icebottom[k1]-self.icetop[k1])*2.0
-    
-        self.snowbot_mode, dummy= stats.mode(self.bot_snow_int[0:int((24.0/self.tstep)*7)])
+
+        self.snowbot_mode, dummy = stats.mode(self.bot_snow_int[0:int((24.0/self.tstep)*7)])
         self.icetop_mode, dummy = stats.mode(self.icetop[0:int((24.0/self.tstep)*7)])
+        if np.isnan(self.icetop_mode):
+            self.icetop_mode = self.snowbot_mode
         self.LengthPlateau = self.icetop_mode - self.snowbot_mode
-        
 
 
 
