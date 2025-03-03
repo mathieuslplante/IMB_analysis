@@ -74,7 +74,6 @@ class SAMSIMBdata:
         if time == None:
             nrows = len(date_all)
             kinit = 0
-
             #If we specified a start time, we need to
             # find the corresponding first row:
             if StartTime != None:
@@ -101,6 +100,8 @@ class SAMSIMBdata:
             date_k = data[ExpSetup.Time_Header][kinit]
             #finding the date of the first data, based on the
             #reference (Jan 01 2022, 0Z)
+            print(kinit, date_k)
+
             ThisDate = self.extract_time(date_data = date_k)
             #Get the row corresponding to the start time
             while ThisDate < time.StartDate:
@@ -193,17 +194,17 @@ class SAMSIMBdata:
                                 if (loc=='PI1'):
                                     if (indname >= indt0+46):
                                         self.data[kout,indname-indt0]= data[header[indname]][kdata]
-                    
-                        #Second part of the thermistor string data                
+
+                        #Second part of the thermistor string data
                         if data['TotalMsgPart'][kdata] == 2:
                             for indname in range(indt0, indt90+1):
                                 self.data[kout,indname-indt0+151] = data[header[indname]][kdata]
-          
+
                             self.datelist[kout] =  new_date.strftime("%Y%m%d%H")
                             self.Lat[kout]= data[ExpSetup.Lat_Header][kdata]
                             self.Lon[kout]= data[ExpSetup.Lon_Header][kdata]
                             self.t[kout]= new_time
-                            self.oceT[kout]=data[header[indtwater]][kdata]                    
+                            self.oceT[kout]=data[header[indtwater]][kdata]
                             if (np.amin(self.data[kout,2:ExpSetup.nsensors+2]) < -60.0):
                                 self.data[kout,:] = np.nan
                             if (np.amax(self.data[kout,2:ExpSetup.nsensors+2]) > 30):
@@ -215,7 +216,7 @@ class SAMSIMBdata:
                         self.airT[kout]=data[header[indtair]][kdata]
                         for indname in range(indt0, indtlast):
                             self.data[kout,indname-indt0+1]= data[header[indname]][kdata]
-                        
+
                         self.datelist[kout] =  new_date.strftime("%Y%m%d%H")
                         self.t[kout]= new_time
                         self.oceT[kout]=data[header[indtwater]][kdata]
@@ -223,19 +224,17 @@ class SAMSIMBdata:
                             self.data[kout,:] = np.nan
                         if (np.amax(self.data[kout,2:ExpSetup.nsensors+2]) > 30):
                             self.data[kout,:] = np.nan
-                            
+
                         print(self.t[kout],self.airT[kout],self.oceT[kout])
-     
 
 
-            
     def find_unstruct(self,header, name1):
         b = len(header)
         for kname in range(0,b):
             if header[kname]==name1:
                 indname = kname
         return indname
-    
+
     def extract_time(self,date_data = None):
         year_data = int(date_data[0:4])
         month_data = int(date_data[5:7])
@@ -244,7 +243,7 @@ class SAMSIMBdata:
         time_k = time(hour_data,0,0)
         date_k = date(year_data,month_data,day_data)
         date_time_k = datetime.combine(date_k,time_k)
-        
+
         return date_time_k
 
     def show_buoy_location(self, OutputFolder = None):
@@ -254,10 +253,10 @@ class SAMSIMBdata:
 
         proj = ccrs.NorthPolarStereo(central_longitude=315)
         extent = [298.5, 298.15, 56.4,56.6]
-        land_10m = cartopy.feature.GSHHSFeature(scale='h', levels=[1],facecolor=cartopy.feature.COLORS['land'])    
-    
+        land_10m = cartopy.feature.GSHHSFeature(scale='h', levels=[1],facecolor=cartopy.feature.COLORS['land'])
+
         Figure1 = plt.figure(figsize=[4.0,4.0])
-        
+
         ax =  Figure1.add_axes([0.0, 0.0, 1.0, 1.0],projection=proj)
         ax.set_extent(extent)
         ax.add_feature(cartopy.feature.OCEAN)
@@ -276,18 +275,15 @@ class SAMSIMBdata:
 
 
 
-   
 class SAMSIMBheatdata:
-    def __init__(self, 
+    def __init__(self,
                  ExpSetup=None, time = None,StartTime = None):
 
         #-----------------------------------
         # Load the data from the input file
         #-----------------------------------
-        
         data = np.genfromtxt(ExpSetup.DataFile,delimiter=',',dtype=None,names=True)
         header = data.dtype.names
-        
         #--------------------------
         #Find the indice corresponding to required columns
         #--------------------------
@@ -332,13 +328,13 @@ class SAMSIMBheatdata:
             print(date_init)
             print(date_last)
             
-        #If we want a specific time interval 
+        #If we want a specific time interval
         #           (requires time object)
-        else: 
+        else:
             nstep = time.ndays
             kinit = 0
             date_k = data[ExpSetup.Time_Header][kinit]
-            #finding the date of the first data, based on the 
+            #finding the date of the first data, based on the
             #reference (Jan 01 F2022, 0Z)
             ThisDate = self.extract_time(date_data = date_k)
             #Get the row corresponding to the start time
@@ -346,13 +342,13 @@ class SAMSIMBheatdata:
                 kinit = kinit+1
                 date_k = data[ExpSetup.Time_Header][kinit]
                 ThisDate = self.extract_time(date_data = date_k)
-                
+
         print(kinit, nstep)
-        
+
         #--------------------------
         # Prepare datasets and initializing parameters
-        #-------------------------- 
-        
+        #--------------------------
+
         self.Lat = np.zeros(nstep)
         self.Lat[:] = np.nan
         self.Lon = np.zeros(nstep)
@@ -367,14 +363,13 @@ class SAMSIMBheatdata:
         self.t[:] = np.nan
         self.data = np.zeros((nstep,ExpSetup.nsensors+1,2))
         self.data[:,:,:] = np.nan
-        
+
         #initializing memory variables of previous date and hour to impossible values
         prev_date = reference_date - timedelta(days=10000)
         prev_hour = -1
-        
         smooth_t = 1    #width of smooting in time
         smooth_z = 2    #range of smooting in z
-        
+
         #Make vertical vector corresponding to the sensor positions
         z = np.zeros((ExpSetup.nsensors+1,1))
         for k in range(1, ExpSetup.nsensors+1):
@@ -385,7 +380,7 @@ class SAMSIMBheatdata:
         heat_ratio = np.zeros((ah,bh))*np.nan   #data array for the heating cycles
         first_der = np.zeros((ah,bh))*np.nan    #data array of the 1st order derivative in Z
         second_der_h = np.zeros((ah,bh))*np.nan #data array of the 2nd order derivative in Z
-    
+
 
 
         #--------------------------
@@ -393,50 +388,46 @@ class SAMSIMBheatdata:
         #   Note: here, we re-organise the data into 1hour
         #   bins, so that we can make a pcolor. This means 
         #   that we are skipping few duplicate transmissions
-        #-------------------------- 
-        
+        #--------------------------
+
         for kdata in range(kinit,a):
-            
             #Update the data
             date_k = data[ExpSetup.Time_Header][kdata]
             date_k = self.extract_time(date_data = date_k)
-            
+
             #record the first date
             if kdata == kinit:
                 ref_time = date_k
-            
+
             #Calculate the row indice
             new_date = date_k
             new_hour = (date_k - ref_time).days
             kout = new_hour
             print(new_date,new_hour,kout)
-            
+
             new_time = 44562.0 + ((date_k - reference_date).seconds /(24*60*60))
 
             #----------------------------------------------
             # Extract data
             #----------------------------------------------
             if kout < nstep:
-                
                 #Get temperature data
                 if data['MsgType'][kdata]==1:
                     self.data[kout,0,0] = kdata
                     for indname in range(indt0, indtlast+1):
                         self.data[kout,indname-indt0+1,0] = data[header[indname]][kdata]
-      
+
                 if data['MsgType'][kdata]==2:
                     self.data[kout,0,1] = kdata
                     for indname in range(indt0, indtlast+1):
                         self.data[kout,indname-indt0+1,1] = data[header[indname]][kdata]
-          
+
                         self.datelist[kout] =  new_date.strftime("%Y%m%d%H")
-            
+
                         self.Lat[kout]= data[ExpSetup.Lat_Header][kdata]
                         self.Lon[kout]= data[ExpSetup.Lon_Header][kdata]
                         self.t[kout]= new_time
-                        
-                        
-    
+
 
         #--------------------------------------------------------------
         #  Compute the heat cycles
@@ -446,13 +437,11 @@ class SAMSIMBheatdata:
         for k1 in range(0, ah):
             for kz in range(1, zf):
                 heat_ratio[k1,kz] = (self.data[k1,kz,1]/ self.data[k1,kz,0])
-        
 
         #--------------------------------------------------------------
         #  Smoothing
         #--------------------------------------------------------------
-    
-    
+
         #Smoothing the heat ratio in time. Smooth_t is the number of points used for the smooting.
         heat_ratio_sm = heat_ratio.copy()
         for k1 in range(0+smooth_t, ah-smooth_t):
@@ -465,7 +454,7 @@ class SAMSIMBheatdata:
                         denom = denom+2
                         heat_ratio_sm[k1,:]= heat_ratio_sm[k1,:] + heat_ratio[k1-n,:] + heat_ratio[k1+n,:]
                 heat_ratio_sm[k1,:] = heat_ratio_sm[k1,:]/denom
-        
+
         #Smoothing the heat ratio vertically. Smooth_z is the number of points used for the smooting.
         for k1 in range(0, ah-1):
             for kz in range(1+smooth_z, zf-smooth_z):
@@ -478,8 +467,8 @@ class SAMSIMBheatdata:
                             denom = denom+2
                             heat_ratio_sm[k1,kz]= heat_ratio_sm[k1,kz] + heat_ratio[k1,kz-n] + heat_ratio[k1,kz+n]
                     heat_ratio_sm[k1,kz] = heat_ratio_sm[k1,kz]/denom
- 
- 
+
+
         #--------------------------------------------------------------
         #  Compute the derivatives
         #--------------------------------------------------------------
@@ -487,25 +476,24 @@ class SAMSIMBheatdata:
             # Compute the first Z-derivative (center difference)
             for kz in range(2, zf-2):
                 first_der[k1,kz] = (heat_ratio_sm[k1,kz+2] - heat_ratio_sm[k1,kz-2])/8.0
-        
+
             # Compute the second Z-derivative (center difference)
             for kz in range(2, zf-2):
                 second_der_h[k1,kz] = (first_der[k1,kz+1] - first_der[k1,kz-1])/4.0
-        
+
         #Record data in objects:
         self.heat_ratio = heat_ratio_sm
         self.second_der = second_der_h
-        
-        
+
     def find_unstruct(self,header, name1):
         b = len(header)
         for kname in range(0,b):
             if header[kname]==name1:
                 indname = kname
         return indname
-    
 
     def extract_time(self,date_data = None):
+
         year_data = int(date_data[0:4])
         month_data = int(date_data[5:7])
         day_data = int(date_data[8:10])
@@ -513,6 +501,6 @@ class SAMSIMBheatdata:
         date_k = date(year_data,month_data,day_data)
         time_k = time(hour_data,0,0)
         date_time_k = datetime.combine(date_k,time_k)
-        
+
         return date_time_k
 

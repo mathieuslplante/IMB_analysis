@@ -11,7 +11,6 @@ import cmocean as cmo
 from SfcRetrieval import SfcRetrieval
 import configparser
 
-
 from TimeUtil import TimeUtil
 from Icepackdata import IcepackData
 from Icepackdata import IcepackDatasetup
@@ -34,13 +33,13 @@ OutputFolder = 'Outputs/'
 visuals = vis()
 
 config_IMB1 = configparser.ConfigParser()
-config_IMB1.read('Buoy_data/namelist_IMB_DAL.ini')
+config_IMB1.read('Buoy_data/namelist_IMB.ini')
 
 BuoySetup = SAMSIMB_DAsetup(config=config_IMB1['IMB_setup'])
 
 timeIMB1 = TimeUtil(config = config_IMB1['Time'])
 
-IMB1Data = DAL_IMBdata(ExpSetup=BuoySetup, time = timeIMB1)
+IMB1Data = SAMSIMBdata(ExpSetup=BuoySetup, time = timeIMB1)
 
 Rtrvl_IMB1 = SfcRetrieval(config=config_IMB1['Retrieval'],Data = IMB1Data.data, Buoy = BuoySetup)
 Rtrvl_IMB1.compute_inferfaces_minimisation(Data= IMB1Data.data,Buoy= BuoySetup)
