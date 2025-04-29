@@ -311,10 +311,10 @@ class IcepackData:
                 klayer=klayer+1
 
 
-        #plot the data timeseries        
-        if FieldName != None:                
-            fieldfig = plt.figure(figsize=[6.0, 4.0]) 
-            ax3 = fieldfig.add_axes([0.2, 0.2, 0.6, 0.6]) 
+        #plot the data timeseries
+        if FieldName != None:
+            fieldfig = plt.figure(figsize=[6.0, 4.0])
+            ax3 = fieldfig.add_axes([0.2, 0.2, 0.6, 0.6])
             figname = self.OutputFolder + FieldName +'.png'
             for kplot in range(0,nlayers):
                 plt.plot(self.t,diag[:,kplot],label='layer %s' % str(kplot))
@@ -323,9 +323,11 @@ class IcepackData:
                 plt.grid(True)
                 (lim1,lim2) = self.make_time_labels([2017,2,23],[2017,4,16])
             plt.legend(loc='lower right',fontsize=8.0 )
+
+            print("Printing %s figure to : %s" % (FieldName,figname))
             fieldfig.savefig(figname)
-            plt.close(fieldfig) 
-   
+            plt.close(fieldfig)
+
         return(diag)
 
 
@@ -336,15 +338,15 @@ class IcepackData:
     #------------------------------------------------
 
         self.data = np.zeros((int(self.ndata),nsensors+2))*np.nan
-  
+
         zf = np.zeros((nsensors,1))
-        zf.fill(np.nan)  
+        zf.fill(np.nan)
         for kz in range(0, nsensors):
             zf[kz] = 100.0-(kz*2.0)
 
         for k in range(0,int(self.ndata)):
-			
-	        #-------------------------------------------------     
+
+            #-------------------------------------------------
             #Make a vector with height of each layer and interfaces
             #-------------------------------------------------
             z = np.zeros((meta.nilyr+meta.nslyr+2,1)) *np.nan #position of the layer interfaces
@@ -354,7 +356,7 @@ class IcepackData:
             hsk = self.Hsavg[k]*100
             hilyrk = hik/meta.nilyr
             hslyrk = hsk/meta.nslyr
-            
+
             #The air-snow interface
             z[0] = hsk
             #Snow layers
@@ -362,29 +364,28 @@ class IcepackData:
                 z[ks] = (hslyrk)*(ks-0.5)
             #Ice layers
             for ki in range(1,meta.nilyr+1):
-                z[ki+meta.nslyr] = -(hilyrk)*(ki-0.5)    
+                z[ki+meta.nslyr] = -(hilyrk)*(ki-0.5)
             z[meta.nslyr+meta.nilyr+1] = -hik
-      
+
             #Raising everything when there is snow ice, as the top of the ice is above 0.
             z = z + self.CumulSnowice[k]*100.0
-    
-	        #-------------------------------------------------     
+
+	    #-------------------------------------------------
             # Interpolate the temperature in simulated IMB sensor positions
-            #    with z=0 being the original ice surface and 50 sensors about the ice (1m) 
-            #-------------------------------------------------    
-            
-            
+            #    with z=0 being the original ice surface and 50 sensors about the ice (1m)
+            #-------------------------------------------------
+
             #Temperature at snow-ice interface, estimated from the temperature gradient in the ice
             Z_0 = self.CumulSnowice[k]*100.0
             T_0 = self.Tice[k,0] + (self.CumulSnowice[k]*100.0-z[1+meta.nslyr])*(self.Tice[k,1]-self.Tice[k,0])/((z[2+meta.nslyr]-z[1+meta.nslyr]))
 
             for kz in range(0, nsensors):
-				
+
 				#Air temperature at Tsfc above the snow
                 if (zf[kz]>= z[0]):
                     self.data[k,kz] = self.Tsfc[k]
-                    
-                #Just below the air-snow interface 
+
+                #Just below the air-snow interface
                 elif zf[kz] >= z[1]:
                     self.data[k,kz] = self.Tsfc[k] + (zf[kz]-z[0])*(self.Tsnow[k,0]-self.Tsfc[k])/((z[1]-z[0]))
 
@@ -394,30 +395,29 @@ class IcepackData:
                         ksnow = indz-1
                         if (zf[kz] < z[indz-1]) and (zf[kz] >= z[indz]):
                             self.data[k,kz] = self.Tsnow[k,ksnow-1] + (zf[kz]-z[indz-1])*(self.Tsnow[k,ksnow]-self.Tsnow[k,ksnow-1])/((z[indz]-z[indz-1]))
-		
+
                 #Just above the snow-ice interface
                 elif zf[kz] >= Z_0:
                     self.data[k,kz] = self.Tsnow[k,meta.nslyr-1] + (zf[kz]-z[meta.nslyr])*(T_0-self.Tsnow[k,meta.nslyr-1])/((Z_0-z[meta.nslyr]))
 
-                #Just below the snow-ice interface 
-                elif zf[kz] >= z[meta.nslyr+1]:	
+                #Just below the snow-ice interface
+                elif zf[kz] >= z[meta.nslyr+1]:
                     self.data[k,kz] = T_0 + (zf[kz]-Z_0)*(self.Tice[k,0]-T_0)/((z[1+meta.nslyr]-Z_0))
-                    
+
                 #In the ice layers  (not happening if only 1 ice layer)
-                elif zf[kz] >= z[meta.nslyr+meta.nilyr]:	
+                elif zf[kz] >= z[meta.nslyr+meta.nilyr]:
                     for indz in range(2+meta.nslyr,meta.nslyr+meta.nilyr+1):
                         kice= indz-1-meta.nslyr
                         if (zf[kz] < z[indz-1]) and (zf[kz] >= z[indz]):
                             self.data[k,kz] = self.Tice[k,kice-1] + (zf[kz]-z[indz-1])*(self.Tice[k,kice]-self.Tice[k,kice-1])/((z[indz]-z[indz-1]))
-		
+
 				#Just above the ice-ocean interface
                 elif (zf[kz] >= z[meta.nslyr+meta.nilyr+1]):
                     self.data[k,kz] = self.Tice[k,meta.nilyr-1] + (zf[kz]-z[meta.nslyr+meta.nilyr])*(self.SST[k]-self.Tice[k,meta.nilyr-1])/((z[meta.nslyr+meta.nilyr+1]-z[meta.nslyr+meta.nilyr]))
 
 				#In the ocean
-                else:  
+                else:
                     self.data[k,kz] = self.SST[k]
-							
 
 
 
