@@ -26,30 +26,29 @@ class SAMSIMB_DAsetup:
         self.OutputFolder = config['OutPath']
         self.Type = config['Type']
         self.Plateau = config['Plateau']
-        self.nsensors = int(config['nsensors']) 
+        self.nsensors = int(config['nsensors'])
         self.tstep = int(config['dt'])
-        self.Tair_Header = config['Tair_Header'] 
-        self.Tocean_Header = config['Tocean_Header'] 
+        self.Tair_Header = config['Tair_Header']
+        self.Tocean_Header = config['Tocean_Header']
         self.Sensor0_Header = config['Sensor0_Header']
-        self.SensorLast_Header = config['SensorLast_Header'] 
+        self.SensorLast_Header = config['SensorLast_Header']
         self.Time_Header = config['Time_Header']
-        self.Lon_Header = config['Lon_Header'] 
-        self.Lat_Header = config['Lat_Header'] 
+        self.Lon_Header = config['Lon_Header']
+        self.Lat_Header = config['Lat_Header']
 
 
-            
 
 class SAMSIMBdata:
-    def __init__(self, 
+    def __init__(self,
                  ExpSetup=None, time = None, url = None, OutputFolder=None,StartTime = None,loc = None):
 
         #-----------------------------------
         # Load the data from the input file
         #-----------------------------------
-        
-        data = np.genfromtxt(ExpSetup.DataFile,delimiter=',',dtype=None,names=True)
+
+        data = np.genfromtxt(ExpSetup.DataFile,delimiter=',', names=True, dtype=None, encoding=None)
         header = data.dtype.names
-        
+
         #--------------------------
         #Find the indice corresponding to required columns
         #--------------------------
@@ -60,15 +59,10 @@ class SAMSIMBdata:
 
         indt0 = self.find_unstruct(header,ExpSetup.Sensor0_Header)
         indtlast = self.find_unstruct(header,ExpSetup.SensorLast_Header)
-        
         indtair = self.find_unstruct(header,ExpSetup.Tair_Header)
         indtwater = self.find_unstruct(header,ExpSetup.Tocean_Header)
-        
-        indt149 = self.find_unstruct(header,'T149')
-        indt90 = self.find_unstruct(header,'T90')
-        
+
         date_all = data[ExpSetup.Time_Header][:]
-        
         reference_date = datetime(2022,1,1,hour=0)
 
         #--------------------------
@@ -80,35 +74,32 @@ class SAMSIMBdata:
         if time == None:
             nrows = len(date_all)
             kinit = 0
-            
+
             #If we specified a start time, we need to
             # find the corresponding first row:
             if StartTime != None:
-                
                 date_k = data[ExpSetup.Time_Header][kinit]
                 ThisDate = self.extract_time(date_data = date_k)
-                
+
                 #loop until we find the row corresponding to the start time
                 while ThisDate < StartTime:
                     kinit = kinit+1
                     date_k = data[ExpSetup.Time_Header][kinit]
                     ThisDate = self.extract_time(date_data = date_k)
-                    
+
             date_init = date_all[kinit]
             date_init = self.extract_time(date_data = date_init)
-            
             date_last = date_all[nrows-1]
             date_last = self.extract_time(date_data = date_last)
-            
+
             nstep = int(int((date_last - date_init).days)*24/ExpSetup.tstep + int((date_last - date_init).seconds/ExpSetup.tstep*60*60 +1))
-            
-            
-        #If time specifications are included, we fetch the specific time interval 
-        else: 
+
+        #If time specifications are included, we fetch the specific time interval
+        else:
             nstep = time.nstep
             kinit = 0
             date_k = data[ExpSetup.Time_Header][kinit]
-            #finding the date of the first data, based on the 
+            #finding the date of the first data, based on the
             #reference (Jan 01 2022, 0Z)
             ThisDate = self.extract_time(date_data = date_k)
             #Get the row corresponding to the start time
@@ -116,14 +107,13 @@ class SAMSIMBdata:
                 kinit = kinit+1
                 date_k = data[ExpSetup.Time_Header][kinit]
                 ThisDate = self.extract_time(date_data = date_k)
-                
-        self.tstep = ExpSetup.tstep        
-        print(kinit, nstep)
-        
+
+        self.tstep = ExpSetup.tstep
+
         #--------------------------
         # Prepare datasets
-        #-------------------------- 
-        
+        #--------------------------
+
         self.Lat = np.zeros(nstep)
         self.Lat[:] = np.nan
         self.Lon = np.zeros(nstep)
@@ -172,48 +162,72 @@ class SAMSIMBdata:
             new_time = 44562.0 +(date_k - reference_date).days + ((date_k - reference_date).seconds /(24*60*60))
             print(new_time)
 
+            if (new_time < 44562.0):
+                msgtype = 'MsgType'
+                msgnum = 0
+                MsgParts = 2
+            else:
+                msgtype = 'msgtype'
+                msgnum = 10
+                MsgParts = 1
 
             #----------------------------------------------
             # Extract the data
             #----------------------------------------------
             if kout < nstep:
-                
+                #Case if data divided in two rows:
                 #Filter out invalid data:
                 if ((data['T10'][kdata] > -60) & 
                             (data['T10'][kdata] < 30) & 
                             (data['T60'][kdata] < -1.0) &
-                            (data['MsgType'][kdata]==0)):  
-                    #Get the first part of the thermistor string data
-                    if data['TotalMsgPart'][kdata] == 1:
+                            (data[msgtype][kdata]==msgnum)):
+                    if MsgParts == 2:
+                        #Get the first part of the thermistor string data
+                        if data['TotalMsgPart'][kdata] == 1:
+                            print(data[header[indtair]][kdata])
+                            self.airT[kout]=data[header[indtair]][kdata]
+                            print(self.airT[kout])
+                            for indname in range(indt0, indt149+1):
+                                self.data[kout,indname-indt0+1]= data[header[indname]][kdata]
+                                #Skip a row in the PI buoy case
+                                if (loc=='PI1'):
+                                    if (indname >= indt0+46):
+                                        self.data[kout,indname-indt0]= data[header[indname]][kdata]
+                    
+                        #Second part of the thermistor string data                
+                        if data['TotalMsgPart'][kdata] == 2:
+                            for indname in range(indt0, indt90+1):
+                                self.data[kout,indname-indt0+151] = data[header[indname]][kdata]
+          
+                            self.datelist[kout] =  new_date.strftime("%Y%m%d%H")
+                            self.Lat[kout]= data[ExpSetup.Lat_Header][kdata]
+                            self.Lon[kout]= data[ExpSetup.Lon_Header][kdata]
+                            self.t[kout]= new_time
+                            self.oceT[kout]=data[header[indtwater]][kdata]                    
+                            if (np.amin(self.data[kout,2:ExpSetup.nsensors+2]) < -60.0):
+                                self.data[kout,:] = np.nan
+                            if (np.amax(self.data[kout,2:ExpSetup.nsensors+2]) > 30):
+                                self.data[kout,:] = np.nan
+                            print(self.t[kout],self.airT[kout],self.oceT[kout])
+
+                    elif MsgParts == 1:
                         print(data[header[indtair]][kdata])
                         self.airT[kout]=data[header[indtair]][kdata]
-                        print(self.airT[kout])
-                        for indname in range(indt0, indt149+1):
+                        for indname in range(indt0, indtlast):
                             self.data[kout,indname-indt0+1]= data[header[indname]][kdata]
-                            #Skip a row in the PI buoy case
-                            if (loc=='PI1'):
-                                if (indname >= indt0+46):
-                                    self.data[kout,indname-indt0]= data[header[indname]][kdata]
-                    
-                    #Second part of the thermistor string data                
-                    if data['TotalMsgPart'][kdata] == 2:
-                        for indname in range(indt0, indt90+1):
-                            self.data[kout,indname-indt0+151] = data[header[indname]][kdata]
-          
+                        
                         self.datelist[kout] =  new_date.strftime("%Y%m%d%H")
-                        self.Lat[kout]= data[ExpSetup.Lat_Header][kdata]
-                        self.Lon[kout]= data[ExpSetup.Lon_Header][kdata]
                         self.t[kout]= new_time
                         self.oceT[kout]=data[header[indtwater]][kdata]
-
-                    
                         if (np.amin(self.data[kout,2:ExpSetup.nsensors+2]) < -60.0):
                             self.data[kout,:] = np.nan
                         if (np.amax(self.data[kout,2:ExpSetup.nsensors+2]) > 30):
                             self.data[kout,:] = np.nan
                             
                         print(self.t[kout],self.airT[kout],self.oceT[kout])
-                    
+     
+
+
             
     def find_unstruct(self,header, name1):
         b = len(header)

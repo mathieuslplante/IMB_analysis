@@ -108,6 +108,7 @@ class visuals:
                 DateLabels.append(' ')
 
         if time_ax is not None:
+            time_ax = time_ax[~np.isnan(time_ax[:])]
             t0 = time_ax[0]
             tlast = time_ax[len(time_ax)-1]
             DeltaTime = tlast-t0
@@ -119,6 +120,7 @@ class visuals:
                 itt = itt+1
             lim1 = ((lim1-t0)/DeltaTime)*DeltaPixel
             lim2 = ((lim2-t0)/DeltaTime)*DeltaPixel
+        print(lim1,lim2)
         plt.xticks(DateTicks,DateLabels)
         plt.xlim(lim1,lim2)
 
@@ -158,7 +160,7 @@ class visuals:
             plt.plot(Data.t,Data.airT,linestyle='-',color='g',label = 'IMB2')
 
 
-        (lim1,lim2) = self.make_time_labels([2017,2,23],[2017,5,5])
+        (lim1,lim2) = self.make_time_labels([2024,1,20],[2024,4,17])
         plt.ylim(-35, 5)
         plt.ylabel(r'$T_{air}$ ($^\circ$C)',fontsize=8)
         plt.xticks(fontsize=8)
@@ -169,13 +171,13 @@ class visuals:
         # Second panel with recorded precipitations from Nain airport and GDPS
         #----------------------------------------------------------------
 
-        if krun == 0:
+        if krun == 0 and Data_station is not None:
             axP = Fig3.add_axes([0.15, 0.62, 0.7, 0.125] )
             Precip_station = Data_station.Precip[0:-2]+Data_station.Precip[1:-1]+Data_station.Precip[2:]
             plt.plot(Data_station.t[1:-1]-5.0/24.0,Precip_station/3.0,linestyle='-',color='black', label='Pcp. W. station')
             plt.plot(Data_model.t,Data_model.SnowPcP*1000.0/3.0,linestyle='-', color='cornflowerblue',label='snow, GDPS')
             plt.plot(Data_model.t,Data_model.RainPcP*1000.0/3.0,linestyle='-', color='blue',label='rain, GDPS')
-            (lim1,lim2) = self.make_time_labels([2017,2,23],[2017,5,5])
+            (lim1,lim2) = self.make_time_labels([2024,1,20],[2024,4,17])
             plt.grid()
             plt.ylabel('Precipitation (mm h$^{-1}$)',fontsize=8)
             plt.xticks(fontsize=8)
@@ -210,8 +212,8 @@ class visuals:
         plt.ylabel('sensor position (cm)',fontsize=8)
         plt.xticks(fontsize=8)
         plt.yticks(fontsize=8)
-
-        (lim1,lim2) = self.make_time_labels([2017,2,23],[2017,5,5],time_ax = Data.t)
+        print(Data.t)
+        (lim1,lim2) = self.make_time_labels([2024,2,15],[2024,4,15],time_ax = Data.t)
         plt.plot(xtime,-Rtrvl.topsnow_minim+z0,linestyle='-',color='b', label='snow surface')
         plt.plot(xtime,-snowbot_init+z0,linestyle='--',color='r', label='plateau')
         plt.plot(xtime,-icetop_init+z0,[-Rtrvl.snowbot_mode+z0,-Rtrvl.snowbot_mode+z0],linestyle='--',color='r',label='')
@@ -432,7 +434,7 @@ class visuals:
         if krun == 1:
             plt.legend(('$h_\mathrm{i}$ SIMBA1','$h_\mathrm{s}$ SIMBA1','$h_\mathrm{fb}$ SIMBA1',
                         '$h_\mathrm{i}$ SIMBA2','$h_\mathrm{s}$ SIMBA2','$h_\mathrm{fb}$ SIMBA2'),bbox_to_anchor=(0., 1.02, 1., .102), loc='lower left', ncol=2, mode="expand", borderaxespad=0.,fontsize=10.0 )
-        (lim1,lim2) = self.make_time_labels([2017,2,23],[2017,5,5])
+        (lim1,lim2) = self.make_time_labels([2024,1,20],[2024,4,17])
         plt.text(-0.15, 1.2,'a)', ha='center', va='center', transform=self.axH1.transAxes,fontsize=14)
 
 
@@ -459,7 +461,7 @@ class visuals:
         if krun == 1:
             plt.legend(('SIMBA1 snow-ice','SIMBA1 congelation','SIMBA2 snow-ice','SIMBA2 congelation'),bbox_to_anchor=(0., 1.02, 1., .102), loc='lower left', ncol=2, mode="expand", borderaxespad=0.,fontsize=10.0 )
 
-        (lim1,lim2) = self.make_time_labels([2017,2,23],[2017,5,5])
+        (lim1,lim2) = self.make_time_labels([2024,1,20],[2024,4,17])
         plt.text(-0.15, 1.2,'b)', ha='center', va='center', transform=self.axH2.transAxes,fontsize=14)
 
         nameFig5 = '%sFigure5_Thickness_Obs.png' % OutputFolder
